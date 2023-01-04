@@ -1,11 +1,12 @@
 package io.github.bootmethod.componentsbuilder.impl
 
 import groovy.transform.CompileStatic
+import io.github.bootmethod.componentsbuilder.BuildResult
 import io.github.bootmethod.componentsbuilder.Components
+import io.github.bootmethod.componentsbuilder.ComponentsBuilder
 import io.github.bootmethod.componentsbuilder.annotation.Component
 import io.github.bootmethod.componentsbuilder.annotation.Destroyer
 import io.github.bootmethod.componentsbuilder.annotation.Initializer
-import io.github.bootmethod.componentsbuilder.annotation.Factory
 import io.github.bootmethod.componentsbuilder.annotation.Variable
 
 import java.lang.reflect.Field
@@ -16,15 +17,15 @@ import java.util.function.Supplier
 
 /**
  * @author : WKZ
- * 
+ *
  * @created: 2023
  * */
 @CompileStatic
-class ComponentsBuilder {
+class ComponentsBuilderImpl implements ComponentsBuilder {
 
     static Runnable NULL_RUNNER = {}
 
-    static class BuildResult {
+    static class BuildResultImpl implements BuildResult {
         MapMap<Class, String, Object> components
         Runnable destroyRunner
     }
@@ -67,14 +68,16 @@ class ComponentsBuilder {
      * @param context
      * @return
      */
-    ComponentsBuilder bindAllVariables(Map<String, Object> variables) {
+    @Override
+    ComponentsBuilderImpl bindAllVariables(Map<String, Object> variables) {
         variables.each {
             bind(it.key, it.value)
         }
         return this
     }
 
-    ComponentsBuilder bindAll(Map<Class, Map<String, Object>> context) {
+    @Override
+    ComponentsBuilderImpl bindAll(Map<Class, Map<String, Object>> context) {
         MapMap<Class, String, Object> map = MapMap.valueOf(context)
         map.eachEntry({ Class type, String name, Object value ->
             this.bind(type, name, value)
@@ -82,22 +85,26 @@ class ComponentsBuilder {
         return this
     }
 
-    ComponentsBuilder bindAllComponents(Map<Class, Object> map) {
+    @Override
+    ComponentsBuilderImpl bindAllComponents(Map<Class, Object> map) {
         map.each {
             bind(it.key, it.value)
         }
         return this
     }
 
-    ComponentsBuilder bind(Class type, Object value) {
+    @Override
+    ComponentsBuilderImpl bind(Class type, Object value) {
         return bind(type, null, value)
     }
 
-    ComponentsBuilder bind(String name, Object value) {
+    @Override
+    ComponentsBuilderImpl bind(String name, Object value) {
         return bind(null, name, value)
     }
 
-    ComponentsBuilder bind(Class type, String name, Object value) {
+    @Override
+    ComponentsBuilderImpl bind(Class type, String name, Object value) {
         if (type) {
             this.components.put(type, name, value)
         } else {
@@ -106,7 +113,8 @@ class ComponentsBuilder {
         return this
     }
 
-    ComponentsBuilder addAll(Class... implClasses) {
+    @Override
+    ComponentsBuilderImpl addAll(Class... implClasses) {
         Map<Class, Class> map = new HashMap<>()
         implClasses.each {
             map.put(it, it)
@@ -114,25 +122,29 @@ class ComponentsBuilder {
         return addAll(map)
     }
 
-    ComponentsBuilder addAll(Map<Class, Class> serviceSpecs) {
+    @Override
+    ComponentsBuilderImpl addAll(Map<Class, Class> serviceSpecs) {
         serviceSpecs.each {
             add(it.key, it.value)
         }
         return this
     }
 
-    ComponentsBuilder add(Class type, Class implClass) {
+    @Override
+    ComponentsBuilderImpl add(Class type, Class implClass) {
         return add(type, {
             return implClass.getConstructor().newInstance()
         } as Supplier)
     }
 
-    ComponentsBuilder add(Class type, Supplier instanceFactory) {
+    @Override
+    ComponentsBuilderImpl add(Class type, Supplier instanceFactory) {
         this.rootSuppliers.put(type, null, instanceFactory)
         return this
     }
 
-    BuildResult build() {
+    @Override
+    BuildResultImpl build() {
         MapMap<Class, String, InstanceHolder> instanceHolderMap = doBuild()
         //Transform to instance map
         MapMap<Class, String, Object> instanceMap = instanceHolderMap.transform({
@@ -155,11 +167,12 @@ class ComponentsBuilder {
                     }
                 } as Runnable
 
-        return new BuildResult(components: instanceMap, destroyRunner: destroyRunner)
+        return new BuildResultImpl(components: instanceMap, destroyRunner: destroyRunner)
     }
 
+    @Override
     Object build(Class type) {
-        BuildResult result = this.build()
+        BuildResultImpl result = this.build()
         Object instance = result.getComponents().get(type, null)
         if (instance == null) {
             throw new RuntimeException("no such component with type:${type.getName()}")
@@ -170,16 +183,19 @@ class ComponentsBuilder {
         return instance
     }
 
+    @Override
     Components buildComponents() {
         return build(new ComponentsImpl())
     }
 
+    @Override
     Components bindAndBuild(Components components) {
         return this.bindAll(components.getAsMap()).build(components)
     }
 
+    @Override
     Components build(Components components) {
-        BuildResult result = this.build()
+        BuildResultImpl result = this.build()
         components.setComponents(result.components.map)
         if (result.destroyRunner != NULL_RUNNER) {
             components.addDestroyHook(result.destroyRunner)
@@ -315,7 +331,7 @@ class ComponentsBuilder {
         Class cls = holder.instance.getClass()
         while (cls != Object.class) {
             cls.getDeclaredMethods().each { Method method ->
-                Factory specify = method.getAnnotation(Factory.class)
+                io.github.bootmethod.componentsbuilder.annotation.Factory specify = method.getAnnotation(io.github.bootmethod.componentsbuilder.annotation.Factory.class)
                 if (!specify) {
                     return
                 }
